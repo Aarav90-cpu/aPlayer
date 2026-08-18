@@ -1,0 +1,17 @@
+# node modules
+node_modules/
+package-lock.json
+package.json
+
+# AI
+AGENTS.md
+__pycache__/
+
+# REQUIRED
+!CONTRIBUTING.md
+!CREDITS.md
+!README.md
+
+# cache and build
+.cache
+core/libplayer.so

@@ -1,3 +1,4 @@
+import '@material/web/dialog/dialog.js';
 import '@material/web/button/filled-tonal-button.js';
 import '@material/web/button/filled-button.js';
 import '@material/web/button/text-button.js';
@@ -61,6 +62,28 @@ async function onPyWebviewReady() {
     const blurSlider = document.getElementById('blur-slider');
     if (savedBlurStrength && blurSlider) {
         blurSlider.value = savedBlurStrength;
+    }
+    
+    // Init Audio FX
+    const overdriveSlider = document.getElementById('overdrive-slider');
+    const overdriveLabel = document.getElementById('overdrive-label');
+    const savedOverdrive = await window.pywebview.api.get_setting('overdrive_value');
+    if (savedOverdrive && overdriveSlider) {
+        overdriveSlider.value = savedOverdrive;
+        if (overdriveLabel) overdriveLabel.innerText = `${savedOverdrive}%`;
+        window.pywebview.api.set_volume(savedOverdrive);
+    } else {
+        window.pywebview.api.set_volume(100);
+    }
+    window.overdriveWarningAccepted = await window.pywebview.api.get_setting('overdrive_warning_accepted');
+
+    const dolbySwitch = document.getElementById('dolby-switch');
+    const savedDolby = await window.pywebview.api.get_setting('dolby_enabled');
+    if (savedDolby !== null && dolbySwitch) {
+        dolbySwitch.selected = savedDolby;
+        window.pywebview.api.set_spatial_audio(savedDolby);
+    } else {
+        window.pywebview.api.set_spatial_audio(true); // Default
     }
     
     if (savedBlurEnabled === true) {
@@ -222,6 +245,53 @@ function initApp() {
     if (blurSlider) {
         blurSlider.addEventListener('change', updateBlur);
     }
+
+    // Audio FX Settings
+    const overdriveSlider = document.getElementById('overdrive-slider');
+    const overdriveLabel = document.getElementById('overdrive-label');
+    const overdriveWarningDialog = document.getElementById('overdrive-warning-dialog');
+    const overdriveCancel = document.getElementById('overdrive-cancel');
+    const overdriveConfirm = document.getElementById('overdrive-confirm');
+
+    if (overdriveSlider) {
+        overdriveSlider.addEventListener('input', () => {
+            let val = parseInt(overdriveSlider.value);
+            if (val > 100 && !window.overdriveWarningAccepted) {
+                overdriveSlider.value = 100;
+                val = 100;
+                if (overdriveWarningDialog) overdriveWarningDialog.show();
+            }
+            if (overdriveLabel) overdriveLabel.innerText = `${val}%`;
+            window.pywebview.api.set_volume(val);
+            window.pywebview.api.set_setting('overdrive_value', val);
+        });
+    }
+
+    if (overdriveCancel && overdriveWarningDialog) {
+        overdriveCancel.addEventListener('click', () => {
+            overdriveWarningDialog.close();
+        });
+    }
+
+    if (overdriveConfirm && overdriveWarningDialog) {
+        overdriveConfirm.addEventListener('click', () => {
+            window.overdriveWarningAccepted = true;
+            window.pywebview.api.set_setting('overdrive_warning_accepted', true);
+            overdriveWarningDialog.close();
+        });
+    }
+
+    const dolbySwitch = document.getElementById('dolby-switch');
+    if (dolbySwitch) {
+        const updateDolby = () => {
+            const isEnabled = dolbySwitch.selected || dolbySwitch.checked;
+            window.pywebview.api.set_spatial_audio(isEnabled);
+            window.pywebview.api.set_setting('dolby_enabled', isEnabled);
+        };
+        dolbySwitch.addEventListener('change', updateDolby);
+        dolbySwitch.addEventListener('click', () => setTimeout(updateDolby, 50));
+    }
+
     console.log("JS: initApp finished successfully");
 }
 

@@ -443,3 +443,72 @@ h1 {
     z-index: 1000;
     text-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
+
+/* Modal Dialog Styles */
+dialog.warning-dialog {
+    background-color: var(--surface-color, #1e1e2e);
+    color: var(--text-primary, #cdd6f4);
+    border: 1px solid var(--border-color, #313244);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 400px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+}
+
+dialog.warning-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+dialog.warning-dialog h3 {
+    margin-top: 0;
+    color: #f38ba8; /* Red for warning */
+    font-size: 1.2rem;
+}
+
+dialog.warning-dialog p {
+    font-size: 0.9rem;
+    color: var(--text-secondary, #bac2de);
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+dialog.warning-dialog .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+dialog.warning-dialog .btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+dialog.warning-dialog .btn.secondary {
+    background: transparent;
+    color: var(--text-primary, #cdd6f4);
+}
+
+dialog.warning-dialog .btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+dialog.warning-dialog .btn.primary {
+    background: #cba6f7;
+    color: #11111b;
+}
+
+dialog.warning-dialog .btn.primary.danger {
+    background: #f38ba8;
+    color: #11111b;
+}
+
+dialog.warning-dialog .btn.primary.danger:hover {
+    background: #e64553;
+}

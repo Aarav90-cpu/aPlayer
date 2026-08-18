@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -fPIC
-LDFLAGS = -shared -lvlc -ltag_c
+LDFLAGS = -shared -ltag_c -lm -lpthread -ldl
 
 TARGET = libplayer.so
 SRCS = player.c scanner.c json_builder.c

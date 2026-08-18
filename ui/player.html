@@ -116,7 +116,41 @@
                     <label for="blur-slider" style="font-size: 1.1rem;">Blur Strength</label>
                     <md-slider id="blur-slider" min="1" max="20" value="4" style="flex: 1;"></md-slider>
                 </div>
+
+                <div class="settings-group" style="margin-top: 32px; padding: 16px; background-color: var(--md-sys-color-surface-variant); border-radius: 12px;">
+                    <h2 style="color: var(--md-sys-color-on-surface-variant); margin-top: 0; font-size: 1.2rem;">Experimental Audio FX Lab</h2>
+                    <div style="display: flex; align-items: center; gap: 16px; margin-top: 16px;">
+                        <md-switch id="dolby-switch" selected></md-switch>
+                        <div>
+                            <label for="dolby-switch" style="font-size: 1.1rem; cursor: pointer; display: block;">Dolby Spoof (Virtual Surround)</label>
+                            <span style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant);">Enabled at Kernel Level (ALSA hw:0)</span>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px; max-width: 400px;">
+                        <label for="overdrive-slider" style="font-size: 1.1rem; display: flex; justify-content: space-between;">
+                            <span>Audio Past Limit</span>
+                            <span id="overdrive-label" style="font-weight: bold;">100%</span>
+                        </label>
+                        <md-slider id="overdrive-slider" min="0" max="250" value="100" style="width: 100%; margin-top: 8px;"></md-slider>
+                        <span style="font-size: 0.85rem; color: var(--md-sys-color-error); display: block; margin-top: 4px;">Warning: >100% may cause hardware damage</span>
+                    </div>
+                </div>
             </div>
+
+            <!-- Overdrive Warning Dialog -->
+            <md-dialog id="overdrive-warning-dialog">
+                <div slot="headline">Speaker Damage Warning</div>
+                <div slot="content">
+                    Increasing the volume past 100% pushes the audio beyond standard limits. This feature uses dynamic range compression, but extreme levels may cause clipping or damage to sensitive speaker hardware.
+                    <br><br>
+                    Are you sure you want to proceed?
+                </div>
+                <div slot="actions">
+                    <md-text-button id="overdrive-cancel" dialog-action="cancel">Cancel</md-text-button>
+                    <md-filled-button id="overdrive-confirm" dialog-action="ok">Yes, Boost Audio</md-filled-button>
+                </div>
+            </md-dialog>
         </main>
         
         <div id="player-bar">

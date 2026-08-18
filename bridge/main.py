@@ -22,6 +22,10 @@ libplayer.player_get_position.restype = ctypes.c_float
 libplayer.player_set_position.argtypes = [ctypes.c_float]
 libplayer.player_get_length.restype = ctypes.c_longlong
 libplayer.player_cleanup.restype = None
+libplayer.player_set_volume.argtypes = [ctypes.c_int]
+libplayer.player_set_volume.restype = None
+libplayer.player_set_spatializer.argtypes = [ctypes.c_int]
+libplayer.player_set_spatializer.restype = None
 
 libplayer.scanner_scan_folder.argtypes = [ctypes.c_char_p]
 libplayer.scanner_scan_folder.restype = ctypes.c_void_p
@@ -70,6 +74,14 @@ class Api:
 
     def get_length(self):
         return libplayer.player_get_length()
+
+    def set_volume(self, volume):
+        libplayer.player_set_volume(int(volume))
+        return True
+
+    def set_spatial_audio(self, enabled):
+        libplayer.player_set_spatializer(1 if enabled else 0)
+        return True
 
     def select_and_scan_folder(self):
         result = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
