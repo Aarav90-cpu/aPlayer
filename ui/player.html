@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>aPlayer</title>
+    <link rel="stylesheet" href="/node_modules/@fontsource/material-symbols-outlined/index.css">
+    <link rel="stylesheet" href="player_style.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "@material/web/": "/node_modules/@material/web/",
+            "tslib": "/node_modules/tslib/tslib.es6.mjs",
+            "lit": "/node_modules/lit/index.js",
+            "lit/": "/node_modules/lit/",
+            "@lit/reactive-element": "/node_modules/@lit/reactive-element/reactive-element.js",
+            "@lit/reactive-element/": "/node_modules/@lit/reactive-element/",
+            "lit-html": "/node_modules/lit-html/lit-html.js",
+            "lit-html/": "/node_modules/lit-html/",
+            "lit-element/": "/node_modules/lit-element/"
+        }
+    }
+    </script>
+    <script type="module" src="player_app.js"></script>
+    <script>
+        window.onerror = function(msg, url, line, col, error) {
+            console.error("Global Error: " + msg + " at " + line + ":" + col);
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.log_error("Global Error: " + msg + " at line " + line);
+            }
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error("Unhandled Rejection: " + e.reason);
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebview.api.log_error("Unhandled Rejection: " + e.reason);
+            }
+        });
+    </script>
+</head>
+<body class="loading-state">
+    <div id="loader">
+        <div class="spinner"></div>
+        <p>Initializing aPlayer...</p>
+    </div>
+    
+    <div id="app" style="display: none;">
+        <nav id="sidebar">
+            <div class="sidebar-top">
+                <h2>aPlayer</h2>
+                <div class="nav-items">
+                    <md-filled-tonal-button class="nav-item active" data-view="home">
+                        <md-icon slot="icon">home</md-icon> Home
+                    </md-filled-tonal-button>
+                    <md-text-button class="nav-item" data-view="playlists">
+                        <md-icon slot="icon">queue_music</md-icon> Playlists
+                    </md-text-button>
+                    <md-text-button class="nav-item" data-view="artists">
+                        <md-icon slot="icon">person</md-icon> Artists
+                    </md-text-button>
+                    <md-text-button class="nav-item" data-view="albums">
+                        <md-icon slot="icon">album</md-icon> Albums
+                    </md-text-button>
+                </div>
+            </div>
+            <div class="sidebar-bottom">
+                <md-text-button class="nav-item" data-view="settings">
+                    <md-icon slot="icon">settings</md-icon> Settings
+                </md-text-button>
+            </div>
+        </nav>
+
+        <main id="content-area">
+            <!-- Dynamic Content Area -->
+            <div id="view-home" class="view active">
+                <div class="header-action">
+                    <h1>Your Library</h1>
+                    <md-filled-button id="scan-btn">
+                        <md-icon slot="icon">folder_open</md-icon> Scan Folder
+                    </md-filled-button>
+                </div>
+                <div id="catalog-grid" class="grid-container">
+                    <p class="empty-state">No music found. Scan a folder to begin.</p>
+                </div>
+            </div>
+
+            <div id="view-playlists" class="view">
+                <h1>Playlists</h1>
+                <p class="empty-state">Playlists coming soon...</p>
+            </div>
+
+            <div id="view-artists" class="view">
+                <h1>Artists</h1>
+                <div id="artists-grid" class="grid-container"></div>
+            </div>
+
+            <div id="view-albums" class="view">
+                <h1>Albums</h1>
+                <div id="albums-grid" class="grid-container"></div>
+            </div>
+
+            <div id="view-settings" class="view">
+                <h1>Settings</h1>
+                <div class="settings-group" style="margin-top: 24px; display: flex; align-items: center; gap: 16px;">
+                    <md-switch id="theme-switch"></md-switch>
+                    <label for="theme-switch" style="font-size: 1.1rem; cursor: pointer;">Enable Dark Mode</label>
+                </div>
+            </div>
+        </main>
+        
+        <div id="player-bar">
+            <div class="track-info">
+                <div class="album-art-mini">
+                    <span class="material-symbols-outlined">music_note</span>
+                </div>
+                <div class="track-details">
+                    <h3 id="current-title">No Track Selected</h3>
+                    <p id="current-artist">Unknown Artist</p>
+                </div>
+            </div>
+            
+            <div class="player-controls">
+                <div class="control-buttons">
+                    <md-icon-button id="prev-btn" aria-label="Previous">
+                        <md-icon>skip_previous</md-icon>
+                    </md-icon-button>
+                    <md-fab id="play-pause-btn" size="medium" variant="primary" aria-label="Play/Pause">
+                        <md-icon slot="icon">play_arrow</md-icon>
+                    </md-fab>
+                    <md-icon-button id="next-btn" aria-label="Next">
+                        <md-icon>skip_next</md-icon>
+                    </md-icon-button>
+                </div>
+                <div class="progress-container">
+                    <span id="time-current">0:00</span>
+                    <canvas id="wavy-slider"></canvas>
+                    <span id="time-total">0:00</span>
+                </div>
+            </div>
+            
+            <div class="volume-controls right-controls">
+                <md-icon-button id="lyrics-btn" aria-label="Lyrics">
+                    <md-icon>lyrics</md-icon>
+                </md-icon-button>
+                <md-icon-button id="up-next-btn" aria-label="Up Next">
+                    <md-icon>queue_music</md-icon>
+                </md-icon-button>
+                <md-icon-button id="heart-btn" aria-label="Favorite">
+                    <md-icon>favorite_border</md-icon>
+                </md-icon-button>
+                <md-icon-button id="loop-btn" aria-label="Loop">
+                    <md-icon>repeat</md-icon>
+                </md-icon-button>
+            </div>
+        </div>
+    </div>
+
+        <div id="lyrics-overlay" class="lyrics-overlay">
+            <div class="lyrics-header">
+                <md-icon-button id="close-lyrics-btn" aria-label="Close Lyrics">
+                    <md-icon>keyboard_arrow_down</md-icon>
+                </md-icon-button>
+            </div>
+            <div id="lyrics-content" class="lyrics-content">
+                <p class="empty-state">No lyrics available</p>
+            </div>
+        </div>
+
+</body>
+</html>
