@@ -21,6 +21,8 @@ let currentTrackIndex = -1;
 let isLyricsVisible = false; // 0.0 to 1.0
 let wavePhase = 0;
 
+
+
 async function onPyWebviewReady() {
     console.log("JS: onPyWebviewReady started");
     document.getElementById('loader').style.display = 'none';
@@ -45,6 +47,26 @@ async function onPyWebviewReady() {
     if ((await window.pywebview.api.get_setting('theme')) === 'dark') {
         document.body.classList.add('dark-theme');
         if(themeSwitch) themeSwitch.selected = true;
+    }
+    
+
+    
+    // Init Blur Settings
+    const savedBlurEnabled = await window.pywebview.api.get_setting('blur_enabled');
+    const blurSwitch = document.getElementById('blur-switch');
+    if (savedBlurEnabled === true && blurSwitch) {
+        blurSwitch.selected = true;
+    }
+    const savedBlurStrength = await window.pywebview.api.get_setting('blur_strength');
+    const blurSlider = document.getElementById('blur-slider');
+    if (savedBlurStrength && blurSlider) {
+        blurSlider.value = savedBlurStrength;
+    }
+    
+    if (savedBlurEnabled === true) {
+        document.body.style.setProperty('--unplayed-blur', `${savedBlurStrength || 4}px`);
+    } else {
+        document.body.style.setProperty('--unplayed-blur', `0px`);
     }
 }
 
@@ -141,8 +163,23 @@ function initApp() {
         playPauseIcon.textContent = isPlaying ? 'pause' : 'play_arrow';
     });
 
-    prevBtn.addEventListener('click', () => console.log("Previous track"));
-    nextBtn.addEventListener('click', () => console.log("Next track"));
+    
+    prevBtn.addEventListener('click', async () => {
+        if (!catalog || catalog.length === 0) return;
+        const currentSec = currentPos * (trackDuration / 1000);
+        if (currentSec > 2) {
+            await window.pywebview.api.set_position(0);
+            currentPos = 0;
+            if (isLyricsVisible) syncLyrics();
+        } else {
+            if (currentTrackIndex > 0) playTrack(catalog[currentTrackIndex - 1]);
+        }
+    });
+    nextBtn.addEventListener('click', () => {
+        if (!catalog || catalog.length === 0) return;
+        if (currentTrackIndex < catalog.length - 1) playTrack(catalog[currentTrackIndex + 1]);
+    });
+
 
     // Theme Toggle
     const themeSwitch = document.getElementById('theme-switch');
@@ -159,6 +196,31 @@ function initApp() {
         };
         themeSwitch.addEventListener('change', toggleTheme);
         themeSwitch.addEventListener('click', () => setTimeout(toggleTheme, 50));
+    }
+
+
+    // Blur Settings
+    const blurSwitch = document.getElementById('blur-switch');
+    const blurSlider = document.getElementById('blur-slider');
+    
+    const updateBlur = () => {
+        const isEnabled = blurSwitch.selected || blurSwitch.checked;
+        const strength = blurSlider.value;
+        if (isEnabled) {
+            document.body.style.setProperty('--unplayed-blur', `${strength}px`);
+        } else {
+            document.body.style.setProperty('--unplayed-blur', `0px`);
+        }
+        window.pywebview.api.set_setting('blur_enabled', isEnabled);
+        window.pywebview.api.set_setting('blur_strength', strength);
+    };
+
+    if (blurSwitch) {
+        blurSwitch.addEventListener('change', updateBlur);
+        blurSwitch.addEventListener('click', () => setTimeout(updateBlur, 50));
+    }
+    if (blurSlider) {
+        blurSlider.addEventListener('change', updateBlur);
     }
     console.log("JS: initApp finished successfully");
 }
@@ -238,12 +300,14 @@ async function renderArtists() {
             if (artist !== 'Unknown Artist') {
                 const url = await getArtistImageUrl(artist);
                 if (url) {
-                    // Find card by its inner text matching the artist name
                     const allCards = container.querySelectorAll('.grid-card');
                     for (const card of allCards) {
                         if (card.querySelector('.card-title').textContent === artist) {
                             const mediaDiv = card.querySelector('.card-media');
-                            mediaDiv.innerHTML = `<img src="${url}" alt="${artist}" loading="lazy">`;
+                            // Ensure the element is still in the DOM
+                            if (document.body.contains(mediaDiv)) {
+                                mediaDiv.innerHTML = `<img src="${url}" alt="${artist}" loading="lazy">`;
+                            }
                         }
                     }
                 }
@@ -280,7 +344,7 @@ async function playTrack(track) {
         const artMini = document.querySelector('.album-art-mini');
         
         // Fetch Album Cover (Fallback)
-        const coverResult = await window.pywebview.api.fetch_album_cover(track.title || track.filename, track.artist || 'Unknown');
+        const coverResult = await window.pywebview.api.fetch_album_cover(track.title || track.filename, track.artist || 'Unknown', track.path);
         if (coverResult && coverResult.url) {
             artMini.innerHTML = `<img src="${coverResult.url}" alt="cover">`;
         } else if (track.cover) {
@@ -356,11 +420,11 @@ async function playTrack(track) {
         // Pre-fetch next and previous covers
         if (currentTrackIndex > 0) {
             const prev = catalog[currentTrackIndex - 1];
-            window.pywebview.api.fetch_album_cover(prev.title || prev.filename, prev.artist || 'Unknown');
+            window.pywebview.api.fetch_album_cover(prev.title || prev.filename, prev.artist || 'Unknown', prev.filepath);
         }
         if (currentTrackIndex < catalog.length - 1) {
             const next = catalog[currentTrackIndex + 1];
-            window.pywebview.api.fetch_album_cover(next.title || next.filename, next.artist || 'Unknown');
+            window.pywebview.api.fetch_album_cover(next.title || next.filename, next.artist || 'Unknown', next.filepath);
         }
     }
 }
@@ -404,14 +468,47 @@ function initWavySlider() {
     });
     resizeObserver.observe(wavyCanvas);
     
-    wavyCanvas.addEventListener('click', async (e) => {
+    let isDraggingWavy = false;
+    
+    const updateWavyPos = async (e) => {
         if (!trackDuration) return;
         const rect = wavyCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
+        const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+        const x = clientX - rect.left;
         const pos = Math.max(0, Math.min(1, x / rect.width));
-        await window.pywebview.api.set_position(pos);
+        
         currentPos = pos;
-        syncLyrics();
+        if (!isDraggingWavy) {
+            await window.pywebview.api.set_position(pos);
+            syncLyrics();
+        }
+    };
+
+    wavyCanvas.addEventListener('mousedown', (e) => { isDraggingWavy = true; updateWavyPos(e); });
+    wavyCanvas.addEventListener('mousemove', (e) => { if (isDraggingWavy) updateWavyPos(e); });
+    wavyCanvas.addEventListener('mouseup', async (e) => { 
+        if (isDraggingWavy) {
+            isDraggingWavy = false; 
+            await window.pywebview.api.set_position(currentPos);
+            syncLyrics();
+        }
+    });
+    wavyCanvas.addEventListener('mouseleave', async () => { 
+        if (isDraggingWavy) {
+            isDraggingWavy = false; 
+            await window.pywebview.api.set_position(currentPos);
+            syncLyrics();
+        }
+    });
+
+    wavyCanvas.addEventListener('touchstart', (e) => { isDraggingWavy = true; updateWavyPos(e); });
+    wavyCanvas.addEventListener('touchmove', (e) => { if (isDraggingWavy) { e.preventDefault(); updateWavyPos(e); } }, {passive: false});
+    wavyCanvas.addEventListener('touchend', async () => { 
+        if (isDraggingWavy) {
+            isDraggingWavy = false; 
+            await window.pywebview.api.set_position(currentPos);
+            syncLyrics();
+        }
     });
     
     requestAnimationFrame(drawWavySlider);
@@ -431,8 +528,17 @@ function drawWavySlider() {
     wavyCtx.clearRect(0, 0, width, height);
     
     const isDark = document.body.classList.contains('dark-theme');
-    const primaryColor = isDark ? '#D0BCFF' : '#6750A4';
-    const trackColor = isDark ? '#4F378B' : '#EADDFF';
+    
+    // Get custom color if set, else fallback
+    const computedStyle = getComputedStyle(document.body);
+    let primaryColor = computedStyle.getPropertyValue('--md-sys-color-primary').trim();
+    if (!primaryColor) {
+        primaryColor = isDark ? '#D0BCFF' : '#6750A4';
+    }
+    
+    // For track color, we can just use a slightly transparent version of primary color
+    // or fallback to the defaults
+    const trackColor = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
     
     const midY = height / 2;
     const progressX = width * currentPos;
@@ -454,7 +560,7 @@ function drawWavySlider() {
     wavyCtx.beginPath();
     wavyCtx.moveTo(0, midY);
     for (let x = 0; x <= progressX; x++) {
-        const y = midY + Math.sin((x * 0.12) - wavePhase) * 6; // Squished width
+        const y = midY + Math.sin((x * 0.08) - wavePhase) * 4; // Smoother android 13 like wave
         wavyCtx.lineTo(x, y);
     }
     wavyCtx.strokeStyle = primaryColor;
@@ -463,7 +569,7 @@ function drawWavySlider() {
     wavyCtx.stroke();
     
     // Thumb ball
-    const thumbY = progressX > 0 ? midY + Math.sin((progressX * 0.12) - wavePhase) * 6 : midY;
+    const thumbY = progressX > 0 ? midY + Math.sin((progressX * 0.08) - wavePhase) * 4 : midY;
     wavyCtx.beginPath();
     wavyCtx.arc(progressX, thumbY, 8, 0, Math.PI * 2);
     wavyCtx.fillStyle = primaryColor;
@@ -484,7 +590,7 @@ function formatTime(ms) {
 function syncLyrics() {
     if (!isLyricsVisible || parsedLyrics.length === 0 || trackDuration === 0) return;
     
-    const currentSec = currentPos * (trackDuration / 1000);
+    const currentSec = currentPos * (trackDuration / 1000) + 0.2; // 0.2s offset to show lyrics slightly early
     let activeIndex = -1;
     
     for (let i = 0; i < parsedLyrics.length; i++) {
@@ -495,7 +601,14 @@ function syncLyrics() {
         }
     }
     
+    let isInstrumental = false;
+    
     if (activeIndex !== -1) {
+        const text = parsedLyrics[activeIndex].text.trim();
+        if (text === "" || text === "♪" || text.toLowerCase().includes("instrumental") || text.includes("🎶")) {
+            isInstrumental = true;
+        }
+        
         document.querySelectorAll('.lyric-line').forEach(el => el.classList.remove('active'));
         const activeEl = document.getElementById(`lrc-${activeIndex}`);
         if (activeEl) {
@@ -505,5 +618,37 @@ function syncLyrics() {
             const offset = activeEl.offsetTop - container.clientHeight / 2 + activeEl.clientHeight / 2;
             container.scrollTo({ top: offset, behavior: 'smooth' });
         }
+    } else {
+        isInstrumental = true;
     }
+    
+    if (isInstrumental && isPlaying) {
+        if (Math.random() < 0.2) {
+            spawnFloatingNote();
+        }
+    }
+
+}
+
+function spawnFloatingNote() {
+    const notes = ['♪', '♫', '🎶', '🎵'];
+    const note = document.createElement('div');
+    note.className = 'floating-note';
+    note.textContent = notes[Math.floor(Math.random() * notes.length)];
+    
+    const isLeft = Math.random() > 0.5;
+    const startX = isLeft ? (5 + Math.random() * 5) : (85 + Math.random() * 5); // Start at 5-10% or 85-90%
+    const floatX = isLeft ? (150 + Math.random() * 100) : (-150 - Math.random() * 100); // Float towards center
+    
+    note.style.left = `${startX}%`;
+    note.style.bottom = `${10 + Math.random() * 40}%`; // Randomize vertical start a bit
+    note.style.setProperty('--float-x', `${floatX}px`);
+    note.style.animationDuration = `${2 + Math.random() * 2}s`;
+    
+    document.getElementById('lyrics-overlay').appendChild(note);
+    
+    // Remove after animation finishes
+    setTimeout(() => {
+        note.remove();
+    }, 4000);
 }

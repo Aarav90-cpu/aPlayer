@@ -5,6 +5,9 @@ import ctypes
 import json
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import urllib.parse
+import urllib.request
+import urllib.error
+import re
 import time
 
 # Load C library
@@ -34,7 +37,7 @@ CACHE_FILE = os.path.join(CACHE_DIR, 'catalog.json')
 
 class Api:
     def __init__(self):
-        pass
+        self._settings_lock = threading.Lock()
 
     def play(self, filepath=None):
         if not filepath:
@@ -96,11 +99,6 @@ class Api:
         return []
 
     def fetch_artist_image(self, artist_name):
-        import urllib.request
-        import urllib.parse
-        import urllib.error
-        import re
-        
         artist_dir = os.path.join(CACHE_DIR, 'artists')
         os.makedirs(artist_dir, exist_ok=True)
         
@@ -122,77 +120,124 @@ class Api:
         )
         
         try:
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 data = json.loads(response.read().decode())
                 if "artists" in data and data["artists"] and data["artists"][0]:
                     img_url = data["artists"][0].get("strArtistBanner") or data["artists"][0].get("strArtistThumb")
                     if img_url:
                         urllib.request.urlretrieve(img_url, filepath)
                         return {"url": f"/.cache/artists/{filename}"}
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"fetch_artist_image v2 error: {e}")
             
         # Fallback to v1
         try:
-            with urllib.request.urlopen(f"https://www.theaudiodb.com/api/v1/json/123/search.php?s={encoded_artist}") as response:
+            with urllib.request.urlopen(f"https://www.theaudiodb.com/api/v1/json/123/search.php?s={encoded_artist}", timeout=5) as response:
                 data = json.loads(response.read().decode())
                 if data.get("artists") and data["artists"][0]:
                     img_url = data["artists"][0].get("strArtistBanner") or data["artists"][0].get("strArtistThumb")
                     if img_url:
                         urllib.request.urlretrieve(img_url, filepath)
                         return {"url": f"/.cache/artists/{filename}"}
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"fetch_artist_image v1 error: {e}")
             
         return {"error": "Image not found"}
 
 
     def fetch_lyrics(self, track_name, artist_name, album_name="", duration=0):
-        import urllib.request
-        import urllib.parse
-        import json
+        safe_name = "".join([c for c in f"{artist_name}_{track_name}" if c.isalnum()]).rstrip()
+        lyrics_dir = os.path.join(CACHE_DIR, 'lyrics')
+        os.makedirs(lyrics_dir, exist_ok=True)
+        cache_path = os.path.join(lyrics_dir, f"{safe_name}.json")
         
-        query = {
-            "track_name": track_name,
-            "artist_name": artist_name
-        }
-        if album_name:
-            query["album_name"] = album_name
-        if duration and duration > 0:
-            query["duration"] = int(duration)
-            
-        url = "https://lrclib.net/api/get?" + urllib.parse.urlencode(query)
-        req = urllib.request.Request(url, headers={"User-Agent": "aPlayer v1.0.0 (https://github.com)"})
-        
-        try:
-            with urllib.request.urlopen(req) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode())
-                    return data
-        except Exception as e:
-            print("LRCLIB Error:", e)
-            pass
+        if os.path.exists(cache_path):
+            with open(cache_path, 'r') as f:
+                return json.load(f)
+                
+        def do_req(url):
+            req = urllib.request.Request(url, headers={"User-Agent": "aPlayer v1.0.0 (https://github.com)"})
+            try:
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    if response.status == 200:
+                        return json.loads(response.read().decode())
+            except Exception as e:
+                print(f"fetch_lyrics error for {url}: {e}")
+            return None
+
+        # Try 1: Exact match with all metadata
+        query1 = {"track_name": track_name, "artist_name": artist_name}
+        if album_name: query1["album_name"] = album_name
+        if duration and duration > 0: query1["duration"] = int(duration)
+        url1 = "https://lrclib.net/api/get?" + urllib.parse.urlencode(query1)
+        res1 = do_req(url1)
+        if res1 and (res1.get('syncedLyrics') or res1.get('plainLyrics')):
+            with open(cache_path, 'w') as f: json.dump(res1, f)
+            return res1
+
+        # Try 2: Exact match without album/duration
+        query2 = {"track_name": track_name, "artist_name": artist_name}
+        url2 = "https://lrclib.net/api/get?" + urllib.parse.urlencode(query2)
+        res2 = do_req(url2)
+        if res2 and (res2.get('syncedLyrics') or res2.get('plainLyrics')):
+            with open(cache_path, 'w') as f: json.dump(res2, f)
+            return res2
+
+        # Try 3: Search endpoint
+        query3 = {"q": f"{track_name} {artist_name}"}
+        url3 = "https://lrclib.net/api/search?" + urllib.parse.urlencode(query3)
+        res3 = do_req(url3)
+        if res3 and isinstance(res3, list) and len(res3) > 0:
+            for item in res3:
+                if item.get('syncedLyrics'):
+                    with open(cache_path, 'w') as f: json.dump(item, f)
+                    return item
+            with open(cache_path, 'w') as f: json.dump(res3[0], f)
+            return res3[0] # Fallback to first even if no syncedLyrics
+
         return {"error": "Lyrics not found"}
 
-    def fetch_album_cover(self, track_name, artist_name):
-        import urllib.request
-        import urllib.parse
-        import json
-        import time
-        import os
-        import re
-        
+
+
+    def fetch_album_cover(self, track_name, artist_name, filepath=None):
         # Clean inputs
         primary_artist = re.split(r'[/,&]|feat\.|ft\.', artist_name, flags=re.IGNORECASE)[0].strip()
         safe_name = "".join([c for c in f"{primary_artist}_{track_name}" if c.isalnum()]).rstrip()
         filename = f"{safe_name}.jpg"
         
         covers_dir = os.path.join(CACHE_DIR, 'covers')
-        filepath = os.path.join(covers_dir, filename)
+        cached_filepath = os.path.join(covers_dir, filename)
         
-        if os.path.exists(filepath):
+        if os.path.exists(cached_filepath):
             return {"url": f"/.cache/covers/{filename}"}
             
+        # Try to extract embedded cover
+        if filepath and os.path.exists(filepath):
+            try:
+                import mutagen
+                audio = mutagen.File(filepath)
+                if audio:
+                    artwork_data = None
+                    if hasattr(audio, 'tags') and audio.tags:
+                        if 'APIC:' in audio.tags: # ID3v2
+                            apic = audio.tags.getall('APIC:')
+                            if apic: artwork_data = apic[0].data
+                        elif 'covr' in audio.tags: # MP4/M4A
+                            artwork_data = audio.tags['covr'][0]
+                        elif 'METADATA_BLOCK_PICTURE' in audio.tags: # FLAC
+                            pics = audio.tags.get('METADATA_BLOCK_PICTURE')
+                            if pics: artwork_data = pics[0].data
+                            
+                    if not artwork_data and hasattr(audio, 'pictures') and audio.pictures:
+                        artwork_data = audio.pictures[0].data
+                    
+                    if artwork_data:
+                        with open(cached_filepath, 'wb') as img:
+                            img.write(artwork_data)
+                        return {"url": f"/.cache/covers/{filename}"}
+            except Exception as e:
+                print("Mutagen embedded art error:", e)
+                
         # 1. Search MusicBrainz to get MBID
         query = f'recording:"{track_name}" AND artist:"{primary_artist}"'
         url = "https://musicbrainz.org/ws/2/recording?query=" + urllib.parse.quote(query) + "&fmt=json"
@@ -206,7 +251,7 @@ class Api:
         
         mbid = None
         try:
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 self._last_mb_req = time.time()
                 if response.status == 200:
                     data = json.loads(response.read().decode())
@@ -226,9 +271,9 @@ class Api:
         caa_url = f"https://coverartarchive.org/release/{mbid}/front"
         caa_req = urllib.request.Request(caa_url, headers={"User-Agent": "aPlayer v1.0.0 (https://github.com)"})
         try:
-            with urllib.request.urlopen(caa_req) as response:
+            with urllib.request.urlopen(caa_req, timeout=5) as response:
                 if response.status == 200:
-                    with open(filepath, 'wb') as out:
+                    with open(cached_filepath, 'wb') as out:
                         out.write(response.read())
                     return {"url": f"/.cache/covers/{filename}"}
         except urllib.error.HTTPError as e:
@@ -240,39 +285,43 @@ class Api:
             
         # Try urlretrieve if redirect failed above
         try:
-            urllib.request.urlretrieve(caa_url, filepath)
+            urllib.request.urlretrieve(caa_url, cached_filepath)
             return {"url": f"/.cache/covers/{filename}"}
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"urlretrieve error: {e}")
             
         return {"error": "Cover not found"}
 
 
     def get_setting(self, key):
-        import json, os
         s_file = os.path.join(CACHE_DIR, 'settings.json')
         if not os.path.exists(s_file):
             return None
-        try:
-            with open(s_file, 'r') as f:
-                d = json.load(f)
-                return d.get(key)
-        except Exception:
-            return None
-            
-    def set_setting(self, key, value):
-        import json, os
-        s_file = os.path.join(CACHE_DIR, 'settings.json')
-        d = {}
-        if os.path.exists(s_file):
+        with self._settings_lock:
             try:
                 with open(s_file, 'r') as f:
                     d = json.load(f)
-            except Exception:
-                pass
-        d[key] = value
-        with open(s_file, 'w') as f:
-            json.dump(d, f)
+                    return d.get(key)
+            except Exception as e:
+                print(f"get_setting error: {e}")
+                return None
+            
+    def set_setting(self, key, value):
+        s_file = os.path.join(CACHE_DIR, 'settings.json')
+        with self._settings_lock:
+            d = {}
+            if os.path.exists(s_file):
+                try:
+                    with open(s_file, 'r') as f:
+                        d = json.load(f)
+                except Exception as e:
+                    print(f"set_setting load error: {e}")
+            d[key] = value
+            try:
+                with open(s_file, 'w') as f:
+                    json.dump(d, f)
+            except Exception as e:
+                print(f"set_setting save error: {e}")
         return True
 
     def log_error(self, msg):
