@@ -19,6 +19,7 @@ Ensure the following are installed on your system:
 1. Navigate to the core directory and compile the C backend:
    ```bash
    cd core
+   make clean
    make
    ```
 

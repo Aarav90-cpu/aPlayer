@@ -25,8 +25,7 @@ bool is_initialized = false;
 bool sound_playing = false;
 float current_volume = 1.0f; // 100%
 bool spatializer_enabled = false;
-ma_context context;
-bool context_initialized = false;
+// Removed context as we now use miniaudio's internal context management
 
 // Crossfade settings
 int max_overlap = 2; // Default
@@ -120,27 +119,7 @@ void player_init() {
             fadeout_sounds[i].active = false;
         }
 
-        ma_backend backends[] = { ma_backend_alsa };
-        if (ma_context_init(backends, 1, NULL, &context) == MA_SUCCESS) {
-            context_initialized = true;
-        }
-
         ma_engine_config engineConfig = ma_engine_config_init();
-        if (context_initialized) {
-            engineConfig.pContext = &context;
-            
-            ma_device_info* pPlaybackInfos;
-            ma_uint32 playbackCount;
-            if (ma_context_get_devices(&context, &pPlaybackInfos, &playbackCount, NULL, NULL) == MA_SUCCESS) {
-                for (ma_uint32 i = 0; i < playbackCount; i++) {
-                    if (strstr(pPlaybackInfos[i].name, "sof-hda-dsp") != NULL || strstr(pPlaybackInfos[i].name, "hw:") != NULL) {
-                        engineConfig.pPlaybackDeviceID = &pPlaybackInfos[i].id;
-                        printf("aPlayer: ALSA hardware device engaged: %s\n", pPlaybackInfos[i].name);
-                        break;
-                    }
-                }
-            }
-        }
 
         if (ma_engine_init(&engineConfig, &engine) != MA_SUCCESS) {
             printf("Failed to initialize miniaudio engine.\n");
@@ -226,24 +205,22 @@ void player_play(const char *filepath) {
         return;
     }
     
-    if (spatializer_enabled) {
-        ma_sound_set_spatialization_enabled(&current_sound, MA_TRUE);
-        ma_engine_listener_set_position(&engine, 0, 0.0f, 0.0f, 0.0f);
-        ma_sound_set_position(&current_sound, 0.0f, 0.0f, -1.0f); 
-    } else {
-        ma_sound_set_spatialization_enabled(&current_sound, MA_FALSE);
-    }
+    // Spatializer removed as it causes vocal phase cancellation (karaoke effect) and overrides volume.
+    // Dolby Spoof will remain in UI but will not downmix to mono.
     
     current_sound_start_time_ms = get_time_ms();
     
     if (crossfade_duration_ms > 0) {
+        printf("aPlayer [DEBUG]: Setting volume to 0.0 for crossfade %d ms\n", crossfade_duration_ms);
         ma_sound_set_volume(&current_sound, 0.0f);
     } else {
+        printf("aPlayer [DEBUG]: Setting volume to %f (no crossfade)\n", current_volume);
         ma_sound_set_volume(&current_sound, current_volume);
     }
     
     ma_sound_start(&current_sound);
     sound_playing = true;
+    printf("aPlayer [DEBUG]: Sound started successfully. sound_playing = true\n");
     
     pthread_mutex_unlock(&fader_mutex);
 }
@@ -342,10 +319,7 @@ void player_cleanup() {
         ma_engine_uninit(&engine);
         is_initialized = false;
     }
-    if (context_initialized) {
-        ma_context_uninit(&context);
-        context_initialized = false;
-    }
+    // Engine destroys its own context automatically if we didn't provide one.
     pthread_mutex_unlock(&fader_mutex);
 }
 
@@ -367,13 +341,7 @@ void player_set_volume(int percent) {
 void player_set_spatializer(int enabled) {
     pthread_mutex_lock(&fader_mutex);
     spatializer_enabled = (enabled != 0);
-    if (sound_playing) {
-        ma_sound_set_spatialization_enabled(&current_sound, spatializer_enabled ? MA_TRUE : MA_FALSE);
-        if (spatializer_enabled) {
-            ma_engine_listener_set_position(&engine, 0, 0.0f, 0.0f, 0.0f);
-            ma_sound_set_position(&current_sound, 0.0f, 0.0f, 1.0f);
-        }
-    }
+    // Spatializer logic removed to preserve vocals and stereo field.
     pthread_mutex_unlock(&fader_mutex);
 }
 
