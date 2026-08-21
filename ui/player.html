@@ -118,6 +118,37 @@
                 </div>
 
                 <div class="settings-group" style="margin-top: 32px; padding: 16px; background-color: var(--md-sys-color-surface-variant); border-radius: 12px;">
+                    <h2 style="color: var(--md-sys-color-on-surface-variant); margin-top: 0; font-size: 1.2rem;">Crossfade Transitions</h2>
+                    
+                    <div style="margin-top: 16px; max-width: 400px;">
+                        <label for="crossfade-slider" style="font-size: 1.1rem; display: flex; justify-content: space-between;">
+                            <span>Transition Time</span>
+                            <span id="crossfade-label" style="font-weight: bold;">0.0s</span>
+                        </label>
+                        <md-slider id="crossfade-slider" min="0" max="10000" step="100" value="0" style="width: 100%; margin-top: 8px;"></md-slider>
+                    </div>
+
+                    <div style="margin-top: 24px; max-width: 400px;">
+                        <label for="crossfade-curve" style="font-size: 1.1rem; display: block; margin-bottom: 8px;">Transition Curve</label>
+                        <md-outlined-select id="crossfade-curve" style="width: 100%;">
+                            <md-select-option value="0"><div slot="headline">Linear</div></md-select-option>
+                            <md-select-option value="1"><div slot="headline">Equal Power</div></md-select-option>
+                            <md-select-option value="2"><div slot="headline">Exponential</div></md-select-option>
+                            <md-select-option value="3"><div slot="headline">Logarithmic</div></md-select-option>
+                            <md-select-option value="4"><div slot="headline">S-Curve</div></md-select-option>
+                        </md-outlined-select>
+                    </div>
+
+                    <div style="margin-top: 24px; max-width: 400px;">
+                        <label for="max-overlap-slider" style="font-size: 1.1rem; display: flex; justify-content: space-between;">
+                            <span>Max Overlapping Sounds</span>
+                            <span id="max-overlap-label" style="font-weight: bold;">2</span>
+                        </label>
+                        <md-slider id="max-overlap-slider" min="1" max="10" step="1" value="2" style="width: 100%; margin-top: 8px;"></md-slider>
+                    </div>
+                </div>
+
+                <div class="settings-group" style="margin-top: 32px; padding: 16px; background-color: var(--md-sys-color-surface-variant); border-radius: 12px;">
                     <h2 style="color: var(--md-sys-color-on-surface-variant); margin-top: 0; font-size: 1.2rem;">Experimental Audio FX Lab</h2>
                     <div style="display: flex; align-items: center; gap: 16px; margin-top: 16px;">
                         <md-switch id="dolby-switch" selected></md-switch>

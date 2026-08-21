@@ -77,6 +77,33 @@ async function onPyWebviewReady() {
     }
     window.overdriveWarningAccepted = await window.pywebview.api.get_setting('overdrive_warning_accepted');
 
+    // Init Crossfade Settings
+    const crossfadeSlider = document.getElementById('crossfade-slider');
+    const crossfadeLabel = document.getElementById('crossfade-label');
+    const crossfadeCurve = document.getElementById('crossfade-curve');
+    const maxOverlapSlider = document.getElementById('max-overlap-slider');
+    const maxOverlapLabel = document.getElementById('max-overlap-label');
+
+    const savedCrossfadeDuration = await window.pywebview.api.get_setting('crossfade_duration') || 0;
+    const savedCrossfadeCurve = await window.pywebview.api.get_setting('crossfade_curve') || 0;
+    const savedMaxOverlap = await window.pywebview.api.get_setting('max_overlap') || 2;
+
+    if (crossfadeSlider) {
+        crossfadeSlider.value = savedCrossfadeDuration;
+        if (crossfadeLabel) crossfadeLabel.innerText = `${(savedCrossfadeDuration / 1000).toFixed(1)}s`;
+    }
+    if (crossfadeCurve) {
+        // Wait for component to be ready or just set it
+        setTimeout(() => crossfadeCurve.value = savedCrossfadeCurve.toString(), 100);
+    }
+    if (maxOverlapSlider) {
+        maxOverlapSlider.value = savedMaxOverlap;
+        if (maxOverlapLabel) maxOverlapLabel.innerText = savedMaxOverlap;
+    }
+
+    window.pywebview.api.set_crossfade(savedCrossfadeDuration, savedCrossfadeCurve);
+    window.pywebview.api.set_max_overlap(savedMaxOverlap);
+
     const dolbySwitch = document.getElementById('dolby-switch');
     const savedDolby = await window.pywebview.api.get_setting('dolby_enabled');
     if (savedDolby !== null && dolbySwitch) {
@@ -290,6 +317,44 @@ function initApp() {
         };
         dolbySwitch.addEventListener('change', updateDolby);
         dolbySwitch.addEventListener('click', () => setTimeout(updateDolby, 50));
+    }
+
+    // Crossfade Event Listeners
+    const crossfadeSlider = document.getElementById('crossfade-slider');
+    const crossfadeLabel = document.getElementById('crossfade-label');
+    const crossfadeCurve = document.getElementById('crossfade-curve');
+    const maxOverlapSlider = document.getElementById('max-overlap-slider');
+    const maxOverlapLabel = document.getElementById('max-overlap-label');
+
+    const updateCrossfade = () => {
+        const duration = parseInt(crossfadeSlider ? crossfadeSlider.value : 0);
+        const curve = parseInt(crossfadeCurve ? crossfadeCurve.value : 0);
+        
+        window.pywebview.api.set_crossfade(duration, curve);
+        window.pywebview.api.set_setting('crossfade_duration', duration);
+        window.pywebview.api.set_setting('crossfade_curve', curve);
+    };
+
+    if (crossfadeSlider) {
+        crossfadeSlider.addEventListener('input', () => {
+            if (crossfadeLabel) crossfadeLabel.innerText = `${(crossfadeSlider.value / 1000).toFixed(1)}s`;
+        });
+        crossfadeSlider.addEventListener('change', updateCrossfade);
+    }
+    
+    if (crossfadeCurve) {
+        crossfadeCurve.addEventListener('change', updateCrossfade);
+    }
+
+    if (maxOverlapSlider) {
+        maxOverlapSlider.addEventListener('input', () => {
+            if (maxOverlapLabel) maxOverlapLabel.innerText = maxOverlapSlider.value;
+        });
+        maxOverlapSlider.addEventListener('change', () => {
+            const count = parseInt(maxOverlapSlider.value);
+            window.pywebview.api.set_max_overlap(count);
+            window.pywebview.api.set_setting('max_overlap', count);
+        });
     }
 
     console.log("JS: initApp finished successfully");

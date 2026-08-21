@@ -26,6 +26,10 @@ libplayer.player_set_volume.argtypes = [ctypes.c_int]
 libplayer.player_set_volume.restype = None
 libplayer.player_set_spatializer.argtypes = [ctypes.c_int]
 libplayer.player_set_spatializer.restype = None
+libplayer.player_set_crossfade.argtypes = [ctypes.c_int, ctypes.c_int]
+libplayer.player_set_crossfade.restype = None
+libplayer.player_set_max_overlap.argtypes = [ctypes.c_int]
+libplayer.player_set_max_overlap.restype = None
 
 libplayer.scanner_scan_folder.argtypes = [ctypes.c_char_p]
 libplayer.scanner_scan_folder.restype = ctypes.c_void_p
@@ -81,6 +85,14 @@ class Api:
 
     def set_spatial_audio(self, enabled):
         libplayer.player_set_spatializer(1 if enabled else 0)
+        return True
+
+    def set_crossfade(self, duration_ms, curve_type):
+        libplayer.player_set_crossfade(int(duration_ms), int(curve_type))
+        return True
+
+    def set_max_overlap(self, count):
+        libplayer.player_set_max_overlap(int(count))
         return True
 
     def select_and_scan_folder(self):

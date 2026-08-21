@@ -15,3 +15,4 @@ __pycache__/
 # cache and build
 .cache
 core/libplayer.so
+fetchit_cache.db

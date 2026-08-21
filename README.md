@@ -22,6 +22,13 @@ Ensure the following are installed on your system:
    make
    ```
 
+### Web Dependencies
+
+1. Install the Node.js packages required for the UI:
+   ```bash
+   npm install
+   ```
+
 ### Running the Application
 
 1. Run the Python bridge:
